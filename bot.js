@@ -87,7 +87,7 @@ function generarMenuRow() {
     const opcionesMenu = [];
     if (systemConfig.propiedades) opcionesMenu.push(new StringSelectMenuOptionBuilder().setLabel('1. Propiedades Personales').setDescription('Casas, Garajes y Almacenes').setEmoji('🏘️').setValue('propiedades'));
     if (systemConfig.negocios)    opcionesMenu.push(new StringSelectMenuOptionBuilder().setLabel('2. Gestión de Negocios').setDescription('Adquisición y Traspasos comerciales').setEmoji('🏢').setValue('negocios'));
-    if (systemConfig.facciones)   opcionesMenu.push(new StringSelectMenuOptionBuilder().setLabel('3. Gestión de Facciones').setDescription('Requiere aprobación LFM/IFM').setEmoji('🏴').setValue('facciones'));
+    if (systemConfig.facciones)   opcionesMenu.push(new StringSelectMenuOptionBuilder().setLabel('3. Gestión de Facciones').setDescription('Solicitudes para grupos aprobados').setEmoji('🏴').setValue('facciones'));
     if (systemConfig.traspasos)   opcionesMenu.push(new StringSelectMenuOptionBuilder().setLabel('4. Traspaso de Bienes').setDescription('Solo 60% del CAPITAL TOTAL').setEmoji('💸').setValue('traspasos'));
     if (systemConfig.mapping)     opcionesMenu.push(new StringSelectMenuOptionBuilder().setLabel('5. Mapping Team').setDescription('Interiores y Entornos').setEmoji('🏗️').setValue('mapping'));
     if (systemConfig.eventos)     opcionesMenu.push(new StringSelectMenuOptionBuilder().setLabel('6. Event Team').setDescription('Solicitud para ayuda en eventos, emisoras, bienes y vehiculos.').setEmoji('🎉').setValue('eventos'));
@@ -123,13 +123,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     .setDescription(`Bienvenido al centro de operaciones de **Control de Propiedades**.\nPara garantizar el orden, todas las gestiones se canalizan única y exclusivamente a través de este panel.`)
                     .setThumbnail(client.user.displayAvatarURL()) 
                     .addFields(
-                        { name: '🏘️ 1. Propiedades Personales', value: 'Gestión de vivienda personal.\n> • **Tipos:** Habilitación de casas, garajes o almacenes.\n> • **Requisito:** Indicar ID/Dirección y Link del PCU.' },
-                        { name: '🏢 2. Gestión de Negocios', value: 'Trámites comerciales.\n> • **Tipos:** Adquisición, traspaso administrativo o cambios de nombre.' },
+                        { name: '🏘️ 1. Propiedades Personales', value: 'Gestión de vivienda personal.\n> • **Tipos:** Habilitación de casas, garajes o almacenes.\n> • **Requisito:** Completar lo solicitado en el formulario.' },
+                        { name: '🏢 2. Gestión de Negocios', value: 'Trámites comerciales.\n> • **Tipos:** Adquisición, traspaso administrativo o cambios en general. \n> • **Requisito:** Completar lo solicitado en el formulario.' },
                         { name: '🏴 3. Gestión de Facciones', value: 'Solicitud de assets, interiores o propiedades para grupos.\n> ⚠️ **REQUISITO:** Debes tener la aprobación previa de **LFM/IFM** según corresponda.' },
-                        { name: '💸 4. Traspaso de Bienes', value: 'Transferencias entre cuentas vivas (**Antes de CK**).\n> • **Norma:** Solo se permite traspasar un **MÁXIMO del 60% del capital total**.\n> • **PK:** Si borras tras PK, no hay gestión posible.\n> • **Namechange:** Se traspasa todo (salvo negocios específicos a revisar).' },
-                        { name: '🏗️ 5. Mapping Team', value: 'Solicitud de entornos personalizados.\n> • Interiores y decoración exterior.\n> • Texturizado y cambios de entorno.\n⚠️ **NOTA:** Las solicitudes deben hacerse con **MÍNIMO 7 DÍAS** de anticipación.' },
+                        { name: '💸 4. Traspaso de Bienes', value: 'Transferencias entre cuentas habilitadas.\n> • **Norma:** Solo se permite traspasar un **MÁXIMO del 60% del capital total**.\n> • **CK:** Tras un CK, no hay gestión posible.\n> • **Changename:** Se traspasa todo (salvo negocios específicos a revisar).' },
+                        { name: '🏗️ 5. Mapping Team', value: 'Solicitud de entornos personalizados.\n> • Solución/bugs de interiores menores.\n> • Pedido para eventos o interiores oficiales.\n⚠️ **NOTA:** Las solicitudes deben hacerse con **MÍNIMO 7 DÍAS** de anticipación.' },
                         // --- AQUÍ ESTÁ EL CAMBIO AÑADIDO: NOTA DE TIEMPO PARA EVENT TEAM ---
-                        { name: '🎉 6. Event Team', value: 'Soporte logístico (Coches, Actores, Dinero) y Difusión de eventos en **#eventos**.\n> 📢 **IMPORTANTE:** La gestión para aparecer en **#eventos** se realiza **SOLO MEDIANTE ESTE APARTADO**.\n ⚠️ **NOTA:** Las solicitudes deben hacerse con **MÍNIMO 3-5 DÍAS** de anticipación.' }
+                        { name: '🎉 6. Event Team', value: 'Soporte logístico (Coches, Actores, Dinero) y Difusión de eventos en **#eventos**.\n> 📢 **IMPORTANTE:** La gestión para aparecer en **#eventos** se realiza **SOLO MEDIANTE ESTE APARTADO**.\n> ⚠️ **NOTA:** Las solicitudes deben hacerse con **MÍNIMO 3-5 DÍAS** de anticipación.' }
                     )
                     .setImage('https://share.creavite.co/67732d0e7e00b0b9.gif') 
                     .setFooter({ text: 'Property Management ― Panel de Soporte', iconURL: client.user.displayAvatarURL() });
