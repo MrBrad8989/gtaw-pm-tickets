@@ -1,0 +1,113 @@
+==============================================================================
+   GUÍA DE INSTALACIÓN Y HOSTING 24/7 - BOT DE GESTIÓN (PROPERTY & EVENTS)
+==============================================================================
+
+Esta guía explica cómo instalar, configurar y mantener el bot activo las 24 horas.
+
+------------------------------------------------------------------------------
+1. REQUISITOS PREVIOS
+------------------------------------------------------------------------------
+Para que el bot funcione, el servidor/PC debe tener instalado:
+
+1. Node.js (Versión 16.9.0 o superior).
+   - Descarga: https://nodejs.org/
+   - Verificar instalación: Abre terminal y escribe `node -v`
+
+------------------------------------------------------------------------------
+2. INSTALACIÓN INICIAL
+------------------------------------------------------------------------------
+Si es la primera vez que descargas el bot en este equipo:
+
+1. Abre la carpeta del bot.
+2. Abre una terminal (CMD o PowerShell) en esa carpeta.
+3. Escribe el siguiente comando para descargar las librerías necesarias:
+   
+   npm install
+
+   (Esto creará la carpeta 'node_modules').
+
+------------------------------------------------------------------------------
+3. CONFIGURACIÓN (LO MÁS IMPORTANTE)
+------------------------------------------------------------------------------
+El bot se controla desde un archivo llamado ".env".
+Si no existe, crea un archivo llamado ".env" (sin nombre, solo extensión) y pega lo siguiente.
+DEBES RELLENAR CADA CAMPO CON LAS ID REALES DE DISCORD.
+
+--- COPIA ESTO DENTRO DE .env ---
+
+TOKEN=PEGA_AQUI_TU_TOKEN_DEL_BOT
+GUILD_ID=PEGA_AQUI_LA_ID_DE_TU_SERVIDOR
+
+# --- IDs DE LAS CATEGORÍAS (Donde se crearán los canales de los tickets) ---
+CAT_PROPIEDADES=ID_CATEGORIA
+CAT_NEGOCIOS=ID_CATEGORIA
+CAT_FACCIONES=ID_CATEGORIA
+CAT_TRASPASOS=ID_CATEGORIA
+CAT_MAPPING=ID_CATEGORIA
+CAT_EVENTOS=ID_CATEGORIA
+
+# --- IDs DE LOS ROLES (Staff que será mencionado y tendrá acceso) ---
+ROL_SOPORTE_PROP=ID_ROL
+ROL_CONTROL_PROP=ID_ROL
+ROL_COORD_PROP=ID_ROL
+ROL_HEAD_PROP=ID_ROL
+ROL_LEAD_EVENT=ID_ROL
+ROL_LEAD_MAPPING=ID_ROL
+ROL_SENIOR_PROP=ID_ROL
+
+# --- IDs DE LOS CANALES DE LOGS (Donde se envían las transcripciones al cerrar) ---
+LOG_PROPIEDADES=ID_CANAL
+LOG_NEGOCIOS=ID_CANAL
+LOG_FACCIONES=ID_CANAL
+LOG_TRASPASOS=ID_CANAL
+LOG_MAPPING=ID_CANAL
+LOG_EVENTOS=ID_CANAL
+
+------------------------------------------------------------------------------
+4. CÓMO CAMBIAR COSAS EN EL FUTURO
+------------------------------------------------------------------------------
+
+A) ¿CAMBIAR UN ROL O CATEGORÍA?
+   No toques el código. Ve al archivo `.env`, cambia la ID numérica y reinicia el bot.
+
+B) ¿CAMBIAR TEXTOS O MENSAJES?
+   Ve al archivo `bot.js`. Busca el texto que quieres cambiar (usa Ctrl+F) y edítalo con cuidado de no borrar comillas. Reinicia el bot.
+
+------------------------------------------------------------------------------
+5. ENCENDER EL BOT (MODO PRUEBA)
+------------------------------------------------------------------------------
+Para probar que todo funciona:
+1. En la terminal escribe:
+   node bot.js
+
+2. Si sale "✅ Bot Activo", está funcionando.
+3. Para apagarlo, pulsa Ctrl + C.
+
+------------------------------------------------------------------------------
+6. HOSTING 24/7 (MODO PRODUCCIÓN) - RECOMENDADO
+------------------------------------------------------------------------------
+Si usas "node bot.js" y cierras la ventana, el bot se apaga.
+Para que siga funcionando 24/7 (incluso si cierras la ventana o el servidor se reinicia), usaremos una herramienta llamada PM2.
+
+PASO 1: Instalar PM2 (Solo se hace una vez)B
+   En la terminal escribe:
+   npm install pm2 -g
+
+PASO 2: Encender el bot con PM2
+   En la terminal, dentro de la carpeta del bot, escribe:
+   pm2 start bot.js --name "BotGestion"
+
+   * El bot ahora está corriendo en segundo plano. Puedes cerrar la terminal.
+
+PASO 3: Comandos útiles de PM2
+   - Ver estado del bot:    pm2 status
+   - Ver consola/errores:   pm2 logs BotGestion
+   - Reiniciar el bot:      pm2 restart BotGestion
+   - Apagar el bot:         pm2 stop BotGestion
+
+------------------------------------------------------------------------------
+SOLUCIÓN DE PROBLEMAS COMUNES
+------------------------------------------------------------------------------
+1. Error "Token invalid": Revisa que el TOKEN en el archivo .env sea correcto.
+2. Error "Missing Permissions": El rol del bot en Discord debe estar ARRIBA del todo en la lista de roles, y debe tener permisos de Administrador.
+3. No aparece el comando /openticket: Asegúrate de que la ID en GUILD_ID en el archivo .env es correcta y reinicia el bot.
