@@ -1,4 +1,6 @@
 require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
 const { 
     Client, 
     GatewayIntentBits, 
@@ -31,9 +33,51 @@ const TICKET_SETTINGS = {
     negocios:    { cat: process.env.CAT_NEGOCIOS,    log: process.env.LOG_NEGOCIOS,    roles: [process.env.ROL_SOPORTE_PROP, process.env.ROL_CONTROL_PROP] },
     facciones:   { cat: process.env.CAT_FACCIONES,   log: process.env.LOG_FACCIONES,   roles: [process.env.ROL_COORD_PROP, process.env.ROL_CONTROL_PROP] },
     traspasos:   { cat: process.env.CAT_TRASPASOS,   log: process.env.LOG_TRASPASOS,   roles: [process.env.ROL_COORD_PROP, process.env.ROL_HEAD_PROP] },
-    mapping:     { cat: process.env.CAT_MAPPING,     log: process.env.LOG_MAPPING,     roles: [process.env.ROL_LEAD_MAPPING] },
-    eventos:     { cat: process.env.CAT_EVENTOS,     log: process.env.LOG_EVENTOS,     roles: [process.env.ROL_LEAD_EVENT] }
+    mapping:     { cat: process.env.CAT_MAPPING,     log: process.env.LOG_MAPPING,     roles: [process.env.ROL_LEAD_MAPPING, process.env.ROL_TEAM_MAPPING] },
+    eventos:     { cat: process.env.CAT_EVENTOS,     log: process.env.LOG_EVENTOS,     roles: [process.env.ROL_LEAD_EVENT, process.env.ROL_TEAM_EVENT] }
 };
+
+const COUNTER_FILE = path.join(__dirname, 'data', 'ticket-counter.json');
+
+// --- FUNCIONES DE UTILIDAD ---
+function parseTicketTopic(topic) {
+    const [ownerId = '', ticketId = '', messageId = '', claimedBy = ''] = (topic || '').split(';');
+    return { ownerId, ticketId, messageId, claimedBy };
+}
+
+function buildTicketTopic({ ownerId = '', ticketId = '', messageId = '', claimedBy = '' }) {
+    return [ownerId, ticketId, messageId, claimedBy].join(';');
+}
+
+async function getNextTicketId() {
+    try {
+        await fs.promises.mkdir(path.dirname(COUNTER_FILE), { recursive: true });
+        let last = 0;
+        try {
+            const raw = await fs.promises.readFile(COUNTER_FILE, 'utf8');
+            const data = JSON.parse(raw);
+            if (typeof data.last === 'number') last = data.last;
+        } catch (err) {}
+        const next = last + 1;
+        await fs.promises.writeFile(COUNTER_FILE, JSON.stringify({ last: next }, null, 2), 'utf8');
+        return next;
+    } catch (err) {
+        console.error('No se pudo leer/escribir el contador, usando timestamp:', err);
+        return Date.now();
+    }
+}
+
+function formatTicketId(num) {
+    return num.toString().padStart(4, '0');
+}
+
+function sanitizeUsername(name) {
+    // Limpia el nombre para que sea seguro en un canal (solo letras, numeros, guiones)
+    const cleaned = (name || '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-') // Reemplaza símbolos raros por guiones
+        .replace(/^-+|-+$/g, '');    // Quita guiones al inicio o final
+    return cleaned.substring(0, 15) || 'staff'; // Limitamos largo para no romper nombre de canal
+}
 
 let systemConfig = {
     propiedades: true, negocios: true, facciones: true,
@@ -96,6 +140,7 @@ function generarMenuRow() {
     return new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId('menu_main').setPlaceholder('📂 Haz clic para seleccionar el departamento...').addOptions(opcionesMenu));
 }
 
+// --- INTERACCIÓN PRINCIPAL ---
 client.on(Events.InteractionCreate, async (interaction) => {
     
     // --- 1. SLASH COMMANDS ---
@@ -128,7 +173,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
                         { name: '🏴 3. Gestión de Facciones', value: 'Solicitud de assets, interiores o propiedades para grupos.\n> ⚠️ **REQUISITO:** Debes tener la aprobación previa de **LFM/IFM** según corresponda.' },
                         { name: '💸 4. Traspaso de Bienes', value: 'Transferencias entre cuentas habilitadas.\n> • **Norma:** Solo se permite traspasar un **MÁXIMO del 60% del capital total**.\n> • **CK:** Tras un CK, no hay gestión posible.\n> • **Changename:** Se traspasa todo (salvo negocios específicos a revisar).' },
                         { name: '🏗️ 5. Mapping Team', value: 'Solicitud de entornos personalizados.\n> • Solución/bugs de interiores menores.\n> • Pedido para eventos o interiores oficiales.\n⚠️ **NOTA:** Las solicitudes deben hacerse con **MÍNIMO 7 DÍAS** de anticipación.' },
-                        // --- AQUÍ ESTÁ EL CAMBIO AÑADIDO: NOTA DE TIEMPO PARA EVENT TEAM ---
                         { name: '🎉 6. Event Team', value: 'Soporte logístico (Coches, Actores, Dinero) y Difusión de eventos en **#eventos**.\n> 📢 **IMPORTANTE:** La gestión para aparecer en **#eventos** se realiza **SOLO MEDIANTE ESTE APARTADO**.\n> ⚠️ **NOTA:** Las solicitudes deben hacerse con **MÍNIMO 3-5 DÍAS** de anticipación.' }
                     )
                     .setImage('https://share.creavite.co/67732d0e7e00b0b9.gif') 
@@ -215,8 +259,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
             rows.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('f_detalle').setLabel('Solicitud (Requiere OK de LFM/IFM)').setStyle(TextInputStyle.Paragraph).setPlaceholder('Detalla los assets que necesitas...').setRequired(true)));
         } else if (val === 'traspasos') {
             rows.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_bienes').setLabel('¿Qué deseas traspasar?').setPlaceholder('Dinero - Vehículo - Propiedad').setStyle(TextInputStyle.Short).setRequired(true)));
-            rows.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_origen').setLabel('Origen: Nombre, Apellido e ID').setStyle(TextInputStyle.Short).setRequired(true)));
-            rows.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_destino').setLabel('Receptor: Nombre, Apellido e ID').setStyle(TextInputStyle.Short).setRequired(true)));
+            rows.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_origen').setLabel('Origen: Nombre, Apellido e ID(/stats)').setStyle(TextInputStyle.Short).setRequired(true)));
+            rows.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_destino').setLabel('Receptor: Nombre, Apellido e ID(/stats)').setStyle(TextInputStyle.Short).setRequired(true)));
             rows.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('t_razon').setLabel('Justifica la razón (Max. 60% capital)').setStyle(TextInputStyle.Paragraph).setPlaceholder('Breve explicación...').setRequired(true)));
         }
         modal.addComponents(rows);
@@ -229,7 +273,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await createTicket(interaction, tipo, interaction.fields);
     }
 
-    // --- 4. BOTÓN CERRAR TICKET (AHORA ABRE MODAL DE MOTIVO) ---
+    // --- 4. BOTÓN CERRAR TICKET ---
     if (interaction.isButton() && interaction.customId === 'close') {
         const modal = new ModalBuilder()
             .setCustomId('close_reason_modal')
@@ -247,11 +291,95 @@ client.on(Events.InteractionCreate, async (interaction) => {
         await interaction.showModal(modal);
     }
 
-    // --- 5. MODAL DE CIERRE SUBMIT (PROCESA EL CIERRE REAL) ---
+    // --- 4b. BOTÓN RECLAMAR TICKET (CORREGIDO LOGO Y NOMBRE) ---
+    if (interaction.isButton() && interaction.customId === 'claim') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        try {
+            // 1. Validar estado actual
+            const topicData = parseTicketTopic(interaction.channel.topic);
+
+            if (topicData.claimedBy === interaction.user.id) {
+                return await interaction.editReply('⚠️ Ya has reclamado este ticket.');
+            }
+
+            // 2. Actualizar Topic
+            topicData.claimedBy = interaction.user.id;
+            try {
+                await interaction.channel.setTopic(buildTicketTopic(topicData));
+            } catch (err) {
+                // Silenciar error de topic
+            }
+
+            // 3. Actualizar Embed (CORRECCIÓN LOGO)
+            let ticketMessage = null;
+            if (topicData.messageId) {
+                try { ticketMessage = await interaction.channel.messages.fetch(topicData.messageId); } catch (e) {}
+            }
+            if (!ticketMessage) {
+                const msgs = await interaction.channel.messages.fetch({ limit: 5 });
+                ticketMessage = msgs.find(m => m.author.id === client.user.id && m.embeds.length > 0);
+            }
+
+            if (ticketMessage) {
+                const baseEmbed = EmbedBuilder.from(ticketMessage.embeds[0]);
+                const fields = baseEmbed.data.fields ? [...baseEmbed.data.fields] : [];
+                
+                const fieldIndex = fields.findIndex(f => f.name === 'Reclamado por' || (f.name && f.name.includes('Reclamado')));
+                const newField = { name: 'Reclamado por', value: `<@${interaction.user.id}>`, inline: true };
+
+                if (fieldIndex >= 0) fields[fieldIndex] = newField;
+                else fields.push(newField);
+
+                baseEmbed.setFields(fields);
+                
+                // --- FIX CRÍTICO DEL LOGO ---
+                // Forzamos el thumbnail de nuevo a la URL del adjunto interno
+                baseEmbed.setThumbnail('attachment://PROPERTY-logo.png');
+
+                await ticketMessage.edit({ 
+                    embeds: [baseEmbed] 
+                    // No ponemos 'files' para que mantenga los existentes
+                });
+            }
+
+            // 4. RESPONDER AL USUARIO
+            await interaction.editReply(`✅ **Ticket reclamado con éxito.**\nAhora eres el encargado de este soporte.`);
+
+            // 5. RENOMBRAR CANAL (CORRECCIÓN NOMBRE: cat-id-staff)
+            const currentName = interaction.channel.name; // Ej: mapping-0004
+            const staffName = sanitizeUsername(interaction.user.username);
+            
+            // Dividimos el nombre actual por guiones
+            const parts = currentName.split('-');
+            
+            // Asumimos que el formato base es siempre [categoria]-[id] (2 partes)
+            // Si ya tiene 3 partes, significa que ya tenía un staff, así que nos quedamos con las 2 primeras.
+            let baseName = "";
+            if (parts.length >= 2) {
+                baseName = `${parts[0]}-${parts[1]}`;
+            } else {
+                baseName = currentName; // Fallback por si acaso
+            }
+
+            const newChannelName = `${baseName}-${staffName}`;
+
+            if (currentName !== newChannelName) {
+                interaction.channel.setName(newChannelName)
+                    .catch(() => {
+                        // Si falla (Rate Limit), no pasa nada, el ticket sigue reclamado
+                    });
+            }
+
+        } catch (err) {
+            try { await interaction.editReply('❌ Error interno al reclamar.'); } catch(e){}
+        }
+    }
+
+    // --- 5. MODAL DE CIERRE SUBMIT ---
     if (interaction.isModalSubmit() && interaction.customId === 'close_reason_modal') {
         const motivo = interaction.fields.getTextInputValue('reason');
         
-        // AVISAR QUE ESTAMOS TRABAJANDO
         await interaction.reply('🔒 **Generando transcripción y cerrando...**');
 
         const parentId = interaction.channel.parentId;
@@ -259,29 +387,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const logChannelId = config ? config.log : null;
         const logChannel = interaction.guild.channels.cache.get(logChannelId);
 
-        // OBTENER ID DEL USUARIO DESDE EL TOPIC DEL CANAL
-        const userId = interaction.channel.topic;
+        const topicData = parseTicketTopic(interaction.channel.topic);
+        const userId = topicData.ownerId || interaction.channel.topic; 
+        const claimedUserId = topicData.claimedBy;
+        const ticketId = topicData.ticketId || interaction.channel.name.split('-')[1] || 'N/A';
         
-        // 1. GENERAR TRANSCRIPT
         const attachment = await discordTranscripts.createTranscript(interaction.channel, {
             limit: -1, returnType: 'attachment', fileName: `${interaction.channel.name}-log.html`, minify: true, saveImages: true
         });
 
-        // 2. ENVIAR LOG AL CANAL DE STAFF
         if (logChannel) {
             const embedLog = new EmbedBuilder()
                 .setTitle(`Ticket Cerrado: ${interaction.channel.name}`)
                 .setColor('Red')
                 .addFields(
+                    { name: 'Ticket ID', value: `#${ticketId}`, inline: true },
                     { name: 'Cerrado por', value: `${interaction.user}`, inline: true },
                     { name: 'Usuario Ticket', value: userId ? `<@${userId}>` : 'Desconocido', inline: true },
+                    { name: 'Reclamado por', value: claimedUserId ? `<@${claimedUserId}>` : 'No reclamado', inline: true },
                     { name: 'Motivo', value: motivo },
                     { name: 'Fecha', value: new Date().toLocaleString() }
                 );
             await logChannel.send({ embeds: [embedLog], files: [attachment] });
         }
 
-        // 3. ENVIAR MD AL USUARIO
         if (userId) {
             try {
                 const user = await client.users.fetch(userId);
@@ -290,7 +419,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
                     .setColor('#2b2d31')
                     .setDescription(`Su ticket **${interaction.channel.name}** ha sido cerrado.`)
                     .addFields(
+                        { name: 'Ticket ID', value: `#${ticketId}`, inline: true },
                         { name: 'Staff', value: interaction.user.tag, inline: true },
+                        { name: 'Reclamado por', value: claimedUserId ? `<@${claimedUserId}>` : 'No reclamado', inline: true },
                         { name: 'Motivo', value: motivo },
                         { name: 'Fecha', value: new Date().toLocaleString() }
                     )
@@ -302,12 +433,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
             }
         }
 
-        // 4. BORRAR CANAL
-        setTimeout(() => interaction.channel.delete(), 5000);
+        setTimeout(() => interaction.channel.delete().catch(e => console.error(e)), 5000);
     }
 });
 
-// --- FUNCIÓN UNIFICADA (NORMAL Y MANUAL) ---
+// --- FUNCIÓN UNIFICADA ---
 async function createTicket(interaction, tipo, fields, targetUser = null, manualReason = null) {
     if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -315,7 +445,9 @@ async function createTicket(interaction, tipo, fields, targetUser = null, manual
     let camposEmbed = [];
     let description = "";
 
-    // LÓGICA DE CAMPOS
+    const ticketSeq = await getNextTicketId();
+    const ticketCode = formatTicketId(ticketSeq);
+
     if (fields) {
         if (tipo === 'propiedades') {
             camposEmbed = [{ name: 'Solicitud', value: fields.getTextInputValue('p_tipo') }, { name: 'Ubicación/ID', value: fields.getTextInputValue('p_id') }, { name: 'Motivo/PCU', value: fields.getTextInputValue('p_motivo') }];
@@ -341,11 +473,9 @@ async function createTicket(interaction, tipo, fields, targetUser = null, manual
         const roleMentions = config.roles.map(id => `<@&${id}>`).join(' ');
 
         const channel = await interaction.guild.channels.create({
-            name: `${tipo}-${ticketOwner.username}`,
+            name: `${tipo}-${ticketCode}`,
             type: ChannelType.GuildText,
             parent: config.cat,
-            // --- AQUÍ GUARDAMOS EL ID DEL DUEÑO EN EL TOPIC PARA EL CIERRE ---
-            topic: ticketOwner.id, 
             permissionOverwrites: [
                 { id: interaction.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
                 { id: ticketOwner.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.AttachFiles] },
@@ -356,22 +486,53 @@ async function createTicket(interaction, tipo, fields, targetUser = null, manual
 
         await interaction.editReply(`✅ Ticket creado: ${channel}`);
 
+        const logoPath = path.join(__dirname, 'public', 'PROPERTY-logo.png');
+
         const tEmbed = new EmbedBuilder()
             .setTitle(`Nueva Solicitud: ${tipo.toUpperCase()}`)
             .setColor('#2b2d31')
-            .setThumbnail(ticketOwner.displayAvatarURL())
             .setDescription(`**Solicitante:** ${ticketOwner}\n${description}${footerPaciencia}`)
             .setTimestamp();
+
+        const embedFields = [{ name: 'ID Ticket', value: `#${ticketCode}`, inline: true }];
+        if (camposEmbed.length > 0) embedFields.push(...camposEmbed);
+        tEmbed.addFields(embedFields);
         
-        if (camposEmbed.length > 0) tEmbed.addFields(camposEmbed);
-        
-        const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒'));
-        
-        await channel.send({ content: `${ticketOwner} | 🔔 Staff: ${roleMentions}`, embeds: [tEmbed], components: [btn] });
+        const btn = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('claim').setLabel('Reclamar Ticket').setStyle(ButtonStyle.Primary).setEmoji('📌'),
+            new ButtonBuilder().setCustomId('close').setLabel('Cerrar Ticket').setStyle(ButtonStyle.Danger).setEmoji('🔒')
+        );
+
+        const msgOptions = {
+            content: `${ticketOwner} | 🔔 Staff: ${roleMentions}`,
+            embeds: [tEmbed],
+            components: [btn]
+        };
+
+        if (fs.existsSync(logoPath)) {
+            msgOptions.files = [{ attachment: logoPath, name: 'PROPERTY-logo.png' }];
+            tEmbed.setThumbnail('attachment://PROPERTY-logo.png');
+        }
+
+        const ticketMessage = await channel.send(msgOptions);
+
+        const topicData = {
+            ownerId: ticketOwner.id,
+            ticketId: ticketCode,
+            messageId: ticketMessage.id,
+            claimedBy: ''
+        };
+        try {
+            await channel.setTopic(buildTicketTopic(topicData));
+        } catch (err) {
+            console.error('No se pudo actualizar el topic del canal tras crear:', err);
+        }
 
     } catch (e) {
         console.error(e);
-        await interaction.editReply('❌ Error crítico: Revisa las IDs en .env');
+        if (interaction.deferred) {
+            await interaction.editReply('❌ Error crítico: Revisa las IDs en .env o permisos del bot.');
+        }
     }
 }
 
